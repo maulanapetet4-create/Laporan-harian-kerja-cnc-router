@@ -4,12 +4,12 @@ import {
   Layers, 
   UserCheck, 
   RotateCcw, 
-  Printer, 
   PlusCircle, 
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  HardDrive
 } from 'lucide-react';
-import { ReportStatus } from '../types';
+import { User } from 'firebase/auth';
 import { LabtechLogo } from './LabtechLogo';
 
 interface HeaderNavProps {
@@ -17,6 +17,9 @@ interface HeaderNavProps {
   onNavigate: (view: 'form' | 'dashboard' | 'approval' | 'print') => void;
   onNewReport: () => void;
   onResetData: () => void;
+  currentUser: User | null;
+  onGoogleSignIn: () => Promise<void>;
+  onGoogleSignOut: () => Promise<void>;
   stats?: {
     total: number;
     pendingSupervisor: number;
@@ -30,6 +33,9 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   onNavigate,
   onNewReport,
   onResetData,
+  currentUser,
+  onGoogleSignIn,
+  onGoogleSignOut,
   stats,
 }) => {
   return (
@@ -51,7 +57,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Divisi CNC Router • Formulir Presisi & Alur Persetujuan Bertingkat (Operator ➔ SPV ➔ GM)
+                Divisi CNC Router • Database Cloud SQL PostgreSQL & Sinkronisasi Google Drive
               </p>
             </div>
           </div>
@@ -91,34 +97,40 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
             </button>
           </nav>
 
-          {/* Quick Action Badges & Reset */}
+          {/* User & Google Drive Auth */}
           <div className="flex items-center gap-2">
-            {stats && (
-              <div className="hidden lg:flex items-center gap-2 mr-2 text-xs">
-                <span 
-                  onClick={() => onNavigate('dashboard')} 
-                  className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                  title="Menunggu persetujuan Supervisor (Mulyana)"
-                >
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span>SPV: {stats.pendingSupervisor}</span>
+            {!currentUser ? (
+              <button
+                onClick={onGoogleSignIn}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white hover:bg-slate-100 text-slate-900 rounded-lg transition shadow-xs"
+                title="Hubungkan Google Drive untuk backup otomatis"
+              >
+                <HardDrive className="w-3.5 h-3.5 text-blue-600" />
+                <span className="hidden sm:inline">Google Drive</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700 text-xs">
+                {currentUser.photoURL ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt={currentUser.displayName || ''}
+                    className="w-5 h-5 rounded-full"
+                  />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px]">
+                    {(currentUser.displayName || currentUser.email || 'U')[0].toUpperCase()}
+                  </div>
+                )}
+                <span className="max-w-[100px] truncate text-slate-200 hidden sm:inline">
+                  {currentUser.displayName || currentUser.email}
                 </span>
-                <span 
-                  onClick={() => onNavigate('dashboard')} 
-                  className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30"
-                  title="Menunggu persetujuan GM (Arifin)"
+                <button
+                  onClick={onGoogleSignOut}
+                  className="text-slate-400 hover:text-red-400 text-[11px] ml-1"
+                  title="Keluar akun Google"
                 >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>GM: {stats.pendingGm}</span>
-                </span>
-                <span 
-                  onClick={() => onNavigate('dashboard')} 
-                  className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                  title="Laporan Selesai Disetujui"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Selesai: {stats.approved}</span>
-                </span>
+                  Keluar
+                </button>
               </div>
             )}
 
@@ -128,7 +140,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
               className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md transition"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Reset Demo</span>
+              <span className="hidden sm:inline">Reset</span>
             </button>
           </div>
         </div>

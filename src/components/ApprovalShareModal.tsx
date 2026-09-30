@@ -1,24 +1,30 @@
 import React, { useState } from 'react';
 import { 
-  X, 
+  Share2, 
   Copy, 
   Check, 
-  ExternalLink, 
   Send, 
-  ShieldCheck, 
+  ExternalLink, 
   UserCheck, 
-  Clock, 
+  ShieldCheck, 
   CheckCircle2, 
-  Share2 
+  Clock,
+  X 
 } from 'lucide-react';
+import { User } from 'firebase/auth';
 import { CncDailyReport } from '../types';
 import { getApprovalUrl } from '../services/reportStorage';
+import { GoogleDriveBackup } from './GoogleDriveBackup';
 
 interface ApprovalShareModalProps {
   report: CncDailyReport;
   isOpen: boolean;
   onClose: () => void;
   onOpenApproval: (reportId: string, role: 'supervisor' | 'gm') => void;
+  currentUser?: User | null;
+  accessToken?: string | null;
+  onGoogleSignIn?: () => Promise<void>;
+  onGoogleSignOut?: () => Promise<void>;
 }
 
 export const ApprovalShareModal: React.FC<ApprovalShareModalProps> = ({
@@ -26,6 +32,10 @@ export const ApprovalShareModal: React.FC<ApprovalShareModalProps> = ({
   isOpen,
   onClose,
   onOpenApproval,
+  currentUser = null,
+  accessToken = null,
+  onGoogleSignIn = async () => {},
+  onGoogleSignOut = async () => {},
 }) => {
   const [copiedRole, setCopiedRole] = useState<'supervisor' | 'gm' | null>(null);
 
@@ -78,40 +88,39 @@ export const ApprovalShareModal: React.FC<ApprovalShareModalProps> = ({
           </button>
         </div>
 
-        {/* Content */}
+        {/* Content Body */}
         <div className="p-6 space-y-5">
-          {/* Progress Indicator */}
-          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-            <div className="text-xs font-semibold text-slate-500 mb-2">STATUS ALUR SAAT INI:</div>
-            <div className="flex items-center justify-between text-xs font-medium">
-              <div className="flex items-center gap-1.5 text-emerald-600">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>1. Operator Submit</span>
+          {/* Progress Tracker Bar */}
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+              <div className="flex items-center gap-1.5 text-blue-600">
+                <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                <span>1. Operator ({report.operatorName})</span>
               </div>
-              <div className="text-slate-300 font-bold">➔</div>
+              <span className="text-slate-300">➔</span>
               <div className={`flex items-center gap-1.5 ${
                 report.status === 'PENDING_SUPERVISOR' 
                   ? 'text-amber-600 font-bold' 
-                  : report.status === 'PENDING_GM' || report.status === 'APPROVED' 
-                  ? 'text-emerald-600' 
+                  : report.supervisorApproval?.decision === 'APPROVED' 
+                  ? 'text-emerald-600 font-bold' 
                   : 'text-slate-400'
               }`}>
-                {report.status === 'PENDING_GM' || report.status === 'APPROVED' ? (
+                {report.supervisorApproval?.decision === 'APPROVED' ? (
                   <CheckCircle2 className="w-4 h-4" />
                 ) : (
                   <Clock className="w-4 h-4" />
                 )}
                 <span>2. SPV ({report.supervisorName})</span>
               </div>
-              <div className="text-slate-300 font-bold">➔</div>
+              <span className="text-slate-300">➔</span>
               <div className={`flex items-center gap-1.5 ${
                 report.status === 'PENDING_GM' 
                   ? 'text-purple-600 font-bold' 
-                  : report.status === 'APPROVED' 
+                  : report.gmApproval?.decision === 'APPROVED' 
                   ? 'text-emerald-600 font-bold' 
                   : 'text-slate-400'
               }`}>
-                {report.status === 'APPROVED' ? (
+                {report.gmApproval?.decision === 'APPROVED' ? (
                   <CheckCircle2 className="w-4 h-4" />
                 ) : (
                   <Clock className="w-4 h-4" />
@@ -282,6 +291,15 @@ export const ApprovalShareModal: React.FC<ApprovalShareModalProps> = ({
               </>
             )}
           </div>
+
+          {/* Google Drive Direct Backup Module */}
+          <GoogleDriveBackup
+            report={report}
+            currentUser={currentUser}
+            accessToken={accessToken}
+            onLogin={onGoogleSignIn}
+            onLogout={onGoogleSignOut}
+          />
         </div>
 
         {/* Footer */}

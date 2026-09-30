@@ -17,7 +17,9 @@ import { TrackingDashboard } from './components/TrackingDashboard';
 import { ApprovalView } from './components/ApprovalView';
 import { PhysicalFormPrint } from './components/PhysicalFormPrint';
 import { ApprovalShareModal } from './components/ApprovalShareModal';
-import { UserCheck, ShieldCheck, User, CheckCircle2 } from 'lucide-react';
+import { initAuth, googleSignIn, logout as googleLogout } from './lib/firebase';
+import { User } from 'firebase/auth';
+import { CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   const [reports, setReports] = useState<CncDailyReport[]>([]);
@@ -27,7 +29,74 @@ export default function App() {
   const [shareModalReport, setShareModalReport] = useState<CncDailyReport | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Load initial reports from local cache and sync with central server
+  // Google Drive & Firebase User State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null);
+
+  // Listen to Google Auth state
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (user, token) => {
+        setCurrentUser(user);
+        setDriveAccessToken(token);
+        // Sync user to Cloud SQL database
+        fetch('/api/users/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoUrl: user.photoURL,
+          }),
+        }).catch((err) => console.warn('Failed to sync user to Cloud SQL:', err));
+      },
+      () => {
+        setCurrentUser(null);
+        setDriveAccessToken(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      const res = await googleSignIn();
+      if (res) {
+        setCurrentUser(res.user);
+        setDriveAccessToken(res.accessToken);
+        showToast(`Berhasil login Google: ${res.user.displayName || res.user.email}`);
+
+        // Sync user to Cloud SQL
+        fetch('/api/users/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: res.user.uid,
+            email: res.user.email,
+            displayName: res.user.displayName,
+            photoUrl: res.user.photoURL,
+          }),
+        }).catch(() => {});
+      }
+    } catch (err: any) {
+      console.error('Google Sign In failed:', err);
+      showToast('Gagal menghubungkan akun Google.');
+    }
+  };
+
+  const handleGoogleSignOut = async () => {
+    try {
+      await googleLogout();
+      setCurrentUser(null);
+      setDriveAccessToken(null);
+      showToast('Berhasil keluar dari akun Google.');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
+
+  // Load initial reports from local cache and sync with central Cloud SQL server
   useEffect(() => {
     const loaded = loadReportsFromStorage();
     setReports(loaded);
@@ -35,7 +104,7 @@ export default function App() {
       setActiveReport(loaded[0]);
     }
 
-    // Central server sync for all devices (HP SPV, GM, PC Operator)
+    // Cloud SQL server sync for all devices (HP SPV, GM, PC Operator)
     fetchReportsFromServer().then((serverReports) => {
       if (serverReports && serverReports.length > 0) {
         setReports(serverReports);
@@ -118,7 +187,7 @@ export default function App() {
     const updatedList = loadReportsFromStorage();
     setReports(updatedList);
     setActiveReport(report);
-    showToast('Draft laporan berhasil disimpan!');
+    showToast('Draft laporan berhasil disimpan ke Cloud SQL!');
   };
 
   const handleSubmitReport = (report: CncDailyReport) => {
@@ -126,7 +195,7 @@ export default function App() {
     const updatedList = loadReportsFromStorage();
     setReports(updatedList);
     setActiveReport(submitted);
-    // Open share modal immediately so user sees generated unique link
+    // Open share modal immediately so user sees generated unique link and Google Drive backup
     setShareModalReport(submitted);
     showToast('Laporan berhasil diajukan ke Supervisor (Mulyana)! Tautan persetujuan telah diterbitkan.');
   };
@@ -138,7 +207,7 @@ export default function App() {
   };
 
   const handleResetData = () => {
-    if (confirm('Reset seluruh data ke data simulasi pabrik awal?')) {
+    if (confirm('Reset seluruh data ke data contoh pabrik bawaan?')) {
       const resetList = resetReportsToDemo();
       setReports(resetList);
       setActiveReport(resetList[0]);
@@ -161,17 +230,15 @@ export default function App() {
     clearAllReportsToZero();
     setReports([]);
     setActiveReport(null);
-    showToast('Seluruh riwayat laporan telah berhasil dihapus hingga 0 (nol).');
+    showToast('Seluruh data laporan berhasil dibersihkan.');
   };
 
   const handleOpenApproval = (reportId: string, role: 'supervisor' | 'gm') => {
-    const target = getReportById(reportId);
+    const target = reports.find((r) => r.id === reportId) || getReportById(reportId);
     if (target) {
       setActiveReport(target);
       setApprovalRole(role);
       setCurrentView('approval');
-      // Update hash for link bookmarking
-      window.location.hash = `approval?id=${reportId}&role=${role}`;
     }
   };
 
@@ -210,6 +277,9 @@ export default function App() {
           }}
           onNewReport={handleNewReport}
           onResetData={handleResetData}
+          currentUser={currentUser}
+          onGoogleSignIn={handleGoogleSignIn}
+          onGoogleSignOut={handleGoogleSignOut}
           stats={stats}
         />
       )}
@@ -268,7 +338,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Share / Unique Link Modal */}
+      {/* Share / Unique Link & Google Drive Modal */}
       {shareModalReport && (
         <ApprovalShareModal
           report={shareModalReport}
@@ -278,6 +348,10 @@ export default function App() {
             setShareModalReport(null);
             handleOpenApproval(id, role);
           }}
+          currentUser={currentUser}
+          accessToken={driveAccessToken}
+          onGoogleSignIn={handleGoogleSignIn}
+          onGoogleSignOut={handleGoogleSignOut}
         />
       )}
     </div>
