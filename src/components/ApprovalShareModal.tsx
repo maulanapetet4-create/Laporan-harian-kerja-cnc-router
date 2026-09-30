@@ -31,8 +31,8 @@ export const ApprovalShareModal: React.FC<ApprovalShareModalProps> = ({
 
   if (!isOpen) return null;
 
-  const spvUrl = getApprovalUrl(report.supervisorToken, 'supervisor', report.id);
-  const gmUrl = getApprovalUrl(report.gmToken, 'gm', report.id);
+  const spvUrl = getApprovalUrl(report.supervisorToken, 'supervisor', report);
+  const gmUrl = getApprovalUrl(report.gmToken, 'gm', report);
 
   const copyToClipboard = (text: string, role: 'supervisor' | 'gm') => {
     navigator.clipboard.writeText(text);

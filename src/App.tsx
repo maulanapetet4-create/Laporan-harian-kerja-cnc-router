@@ -6,7 +6,8 @@ import {
   resetReportsToDemo, 
   getReportById,
   deleteReport,
-  clearAllReportsToZero
+  clearAllReportsToZero,
+  decodeReportFromUrl
 } from './services/reportStorage';
 import { createNewBlankReport } from './services/mockReports';
 import { CncDailyReport } from './types';
@@ -46,11 +47,27 @@ export default function App() {
           const token = params.get('token');
           const role = (params.get('role') as 'supervisor' | 'gm') || 'supervisor';
           const reportId = params.get('id');
+          const payloadStr = params.get('payload');
 
-          const allReports = loadReportsFromStorage();
-          let target = allReports.find((r) => r.id === reportId);
-          if (!target && token) {
-            target = allReports.find((r) => r.supervisorToken === token || r.gmToken === token);
+          let target: CncDailyReport | undefined;
+
+          // If payload is supplied in URL (cross-device/WhatsApp sharing to HP)
+          if (payloadStr) {
+            const decoded = decodeReportFromUrl(payloadStr);
+            if (decoded) {
+              target = decoded;
+              // Synchronize/save into local storage of the HP device so it's persisted
+              saveOrUpdateReport(decoded);
+              setReports(loadReportsFromStorage());
+            }
+          }
+
+          if (!target) {
+            const allReports = loadReportsFromStorage();
+            target = allReports.find((r) => r.id === reportId);
+            if (!target && token) {
+              target = allReports.find((r) => r.supervisorToken === token || r.gmToken === token);
+            }
           }
 
           if (target) {

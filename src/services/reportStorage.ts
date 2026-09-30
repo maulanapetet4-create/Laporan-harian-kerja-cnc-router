@@ -184,7 +184,49 @@ export const clearAllReportsToZero = (): void => {
   saveReportsToStorage([]);
 };
 
-export const getApprovalUrl = (token: string, role: 'supervisor' | 'gm', reportId?: string): string => {
+// Helper: UTF-8 safe base64 encoding & decoding for cross-device URL sharing
+export const encodeReportForUrl = (report: CncDailyReport): string => {
+  try {
+    const jsonStr = JSON.stringify(report);
+    // Encode to base64 with URI component safety
+    return btoa(encodeURIComponent(jsonStr));
+  } catch (e) {
+    console.error('Failed to encode report for URL:', e);
+    return '';
+  }
+};
+
+export const decodeReportFromUrl = (encodedStr: string): CncDailyReport | null => {
+  try {
+    const jsonStr = decodeURIComponent(atob(encodedStr));
+    const parsed = JSON.parse(jsonStr);
+    if (parsed && parsed.id && parsed.operatorName !== undefined) {
+      return parsed as CncDailyReport;
+    }
+    return null;
+  } catch (e) {
+    console.error('Failed to decode report from URL:', e);
+    return null;
+  }
+};
+
+export const getApprovalUrl = (token: string, role: 'supervisor' | 'gm', report?: CncDailyReport | string): string => {
   const baseUrl = window.location.origin + window.location.pathname;
-  return `${baseUrl}#approval?token=${encodeURIComponent(token)}&role=${role}${reportId ? `&id=${encodeURIComponent(reportId)}` : ''}`;
+  let reportId = '';
+  let payloadParam = '';
+
+  if (typeof report === 'string') {
+    reportId = report;
+    const found = getReportById(reportId);
+    if (found) {
+      const encoded = encodeReportForUrl(found);
+      if (encoded) payloadParam = `&payload=${encodeURIComponent(encoded)}`;
+    }
+  } else if (report && typeof report === 'object') {
+    reportId = report.id;
+    const encoded = encodeReportForUrl(report);
+    if (encoded) payloadParam = `&payload=${encodeURIComponent(encoded)}`;
+  }
+
+  return `${baseUrl}#approval?token=${encodeURIComponent(token)}&role=${role}${reportId ? `&id=${encodeURIComponent(reportId)}` : ''}${payloadParam}`;
 };
