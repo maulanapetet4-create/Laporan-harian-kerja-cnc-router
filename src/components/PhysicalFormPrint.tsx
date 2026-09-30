@@ -127,7 +127,7 @@ export const PhysicalFormPrint: React.FC<PhysicalFormPrintProps> = ({
               <strong className="text-slate-900">{report.project}</strong>
             </div>
             <div className="p-1.5">
-              <span className="text-slate-500 block text-[9px]">Sasa No. (No. SPK / Order):</span>
+              <span className="text-slate-500 block text-[9px]">Sosa No. (No. SPK / Order):</span>
               <strong className="font-mono text-slate-900">{report.sasaNo}</strong>
             </div>
           </div>
@@ -460,7 +460,7 @@ export const PhysicalFormPrint: React.FC<PhysicalFormPrintProps> = ({
 
         {/* Footer Dokumen */}
         <div className="mt-3 flex justify-between items-center text-[8px] text-slate-500 border-t border-slate-300 pt-1">
-          <span>Dicetak melalui Sistem Informasi Manufaktur CNC PT SASA</span>
+          <span>Dicetak melalui Sistem Informasi Manufaktur CNC PT Labtech Indonesia</span>
           <span>Security Token: {report.supervisorToken.substring(0, 10)}... | {report.id}</span>
         </div>
       </div>

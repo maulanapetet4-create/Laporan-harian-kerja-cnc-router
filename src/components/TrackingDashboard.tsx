@@ -480,7 +480,7 @@ export const TrackingDashboard: React.FC<TrackingDashboardProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cari SPK Sasa No, project, operator, ID..."
+            placeholder="Cari SPK Sosa No, project, operator, ID..."
             className="w-full text-xs pl-9 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
           />
         </div>

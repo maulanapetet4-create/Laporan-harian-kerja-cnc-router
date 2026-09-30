@@ -198,7 +198,7 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({
       return;
     }
     if (!report.sasaNo.trim()) {
-      setErrorMsg('Nomor SPK / Sasa No. wajib diisi!');
+      setErrorMsg('Nomor SPK / Sosa No. wajib diisi!');
       return;
     }
 
@@ -420,13 +420,13 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Sasa No. (No. SPK / Order) <span className="text-red-500">*</span>
+              Sosa No. (No. SPK / Order) <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={report.sasaNo}
               onChange={(e) => updateHeader('sasaNo', e.target.value)}
-              placeholder="Contoh: SPK-SASA-9941"
+              placeholder="Contoh: SPK-SOSA-9941"
               className="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
           </div>

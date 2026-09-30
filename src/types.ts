@@ -89,7 +89,7 @@ export interface CncDailyReport {
   workStartTime: string; // e.g. "08:00"
   workEndTime: string; // e.g. "16:30"
   project: string;
-  sasaNo: string; // No. SPK / Order Sasa
+  sasaNo: string; // No. SPK / Order Sosa
 
   // Bagian A (Perawatan Mesin)
   sectionA: SectionAMaintenance;

@@ -16,7 +16,7 @@ export const exportReportsToCsvSummary = (reports: CncDailyReport[]): void => {
   const headers = [
     'ID Laporan',
     'Tanggal Laporan',
-    'No. SPK (Sasa No)',
+    'No. SPK (Sosa No)',
     'Project',
     'Nama Operator',
     'Shift',

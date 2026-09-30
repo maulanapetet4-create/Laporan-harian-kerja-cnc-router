@@ -7,7 +7,7 @@ import {
   getReportById,
   deleteReport,
   clearAllReportsToZero,
-  decodeReportFromUrl
+  fetchReportsFromServer
 } from './services/reportStorage';
 import { createNewBlankReport } from './services/mockReports';
 import { CncDailyReport } from './types';
@@ -27,54 +27,71 @@ export default function App() {
   const [shareModalReport, setShareModalReport] = useState<CncDailyReport | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Load initial reports
+  // Load initial reports from local cache and sync with central server
   useEffect(() => {
     const loaded = loadReportsFromStorage();
     setReports(loaded);
     if (loaded.length > 0 && !activeReport) {
       setActiveReport(loaded[0]);
     }
+
+    // Central server sync for all devices (HP SPV, GM, PC Operator)
+    fetchReportsFromServer().then((serverReports) => {
+      if (serverReports && serverReports.length > 0) {
+        setReports(serverReports);
+        setActiveReport((prev) => {
+          if (!prev) return serverReports[0];
+          const refreshed = serverReports.find((r) => r.id === prev.id);
+          return refreshed || serverReports[0];
+        });
+      }
+    });
   }, []);
 
-  // Check URL hash for direct approval links (#approval?token=... or #approval?id=...&role=...)
+  // Check URL hash for direct approval links (#/spv/CNC-... or #/gm/CNC-... or legacy #approval?...)
   useEffect(() => {
-    const checkHashRoute = () => {
+    const checkHashRoute = async () => {
       const hash = window.location.hash;
-      if (hash.startsWith('#approval')) {
+      if (!hash) return;
+
+      let role: 'supervisor' | 'gm' = 'supervisor';
+      let searchKey = '';
+
+      // Pattern 1: Short Clean Format (e.g. #/spv/CNC-2026-001 or #/gm/CNC-2026-001)
+      const shortMatch = hash.match(/^#\/(spv|gm)\/([^?&]+)/i);
+      if (shortMatch) {
+        role = shortMatch[1].toLowerCase() === 'gm' ? 'gm' : 'supervisor';
+        searchKey = decodeURIComponent(shortMatch[2]);
+      } 
+      // Pattern 2: Legacy query format (#approval?token=...&role=...&id=...)
+      else if (hash.startsWith('#approval')) {
         const queryStr = hash.split('?')[1];
         if (queryStr) {
           const params = new URLSearchParams(queryStr);
-          const token = params.get('token');
-          const role = (params.get('role') as 'supervisor' | 'gm') || 'supervisor';
-          const reportId = params.get('id');
-          const payloadStr = params.get('payload');
+          const legacyRole = params.get('role');
+          role = legacyRole === 'gm' ? 'gm' : 'supervisor';
+          searchKey = params.get('id') || params.get('token') || '';
+        }
+      }
 
-          let target: CncDailyReport | undefined;
+      if (searchKey) {
+        // Fetch latest state from central server first
+        const serverReports = await fetchReportsFromServer();
+        let target = serverReports.find(
+          (r) => r.id === searchKey || r.supervisorToken === searchKey || r.gmToken === searchKey
+        );
 
-          // If payload is supplied in URL (cross-device/WhatsApp sharing to HP)
-          if (payloadStr) {
-            const decoded = decodeReportFromUrl(payloadStr);
-            if (decoded) {
-              target = decoded;
-              // Synchronize/save into local storage of the HP device so it's persisted
-              saveOrUpdateReport(decoded);
-              setReports(loadReportsFromStorage());
-            }
-          }
+        if (!target) {
+          const allReports = loadReportsFromStorage();
+          target = allReports.find(
+            (r) => r.id === searchKey || r.supervisorToken === searchKey || r.gmToken === searchKey
+          );
+        }
 
-          if (!target) {
-            const allReports = loadReportsFromStorage();
-            target = allReports.find((r) => r.id === reportId);
-            if (!target && token) {
-              target = allReports.find((r) => r.supervisorToken === token || r.gmToken === token);
-            }
-          }
-
-          if (target) {
-            setActiveReport(target);
-            setApprovalRole(role);
-            setCurrentView('approval');
-          }
+        if (target) {
+          setActiveReport(target);
+          setApprovalRole(role);
+          setCurrentView('approval');
         }
       }
     };
@@ -195,67 +212,6 @@ export default function App() {
           onResetData={handleResetData}
           stats={stats}
         />
-      )}
-
-      {/* Simulation Helper Strip (No Print) */}
-      {currentView !== 'print' && (
-        <div className="bg-slate-800/90 text-white py-2 px-4 text-xs border-b border-slate-700 no-print">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-slate-300">
-              <span className="font-semibold text-blue-400">Mode Simulasi Pengujian:</span>
-              <span>Uji alur persetujuan bertingkat dengan 1 klik:</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                onClick={() => {
-                  if (!activeReport) handleNewReport();
-                  else setCurrentView('form');
-                }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs transition ${
-                  currentView === 'form' ? 'bg-blue-600 text-white font-bold' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-                }`}
-              >
-                <User className="w-3 h-3" />
-                <span>1. Operator Form</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  const target = reports.find((r) => r.status === 'PENDING_SUPERVISOR') || activeReport || reports[0];
-                  if (target) {
-                    handleOpenApproval(target.id, 'supervisor');
-                  }
-                }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs transition ${
-                  currentView === 'approval' && approvalRole === 'supervisor'
-                    ? 'bg-amber-600 text-white font-bold'
-                    : 'bg-slate-700 hover:bg-slate-600 text-amber-300'
-                }`}
-              >
-                <UserCheck className="w-3 h-3" />
-                <span>2. Review SPV (Mulyana)</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  const target = reports.find((r) => r.status === 'PENDING_GM') || activeReport || reports[0];
-                  if (target) {
-                    handleOpenApproval(target.id, 'gm');
-                  }
-                }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs transition ${
-                  currentView === 'approval' && approvalRole === 'gm'
-                    ? 'bg-purple-700 text-white font-bold'
-                    : 'bg-slate-700 hover:bg-slate-600 text-purple-300'
-                }`}
-              >
-                <ShieldCheck className="w-3 h-3" />
-                <span>3. Review GM (Arifin)</span>
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Main Content Area */}

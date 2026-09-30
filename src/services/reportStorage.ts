@@ -3,6 +3,7 @@ import { INITIAL_REPORTS } from './mockReports';
 
 const STORAGE_KEY = 'cnc_daily_reports_db_v1';
 
+// Synchronous fallback reader from localStorage
 export const loadReportsFromStorage = (): CncDailyReport[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -26,6 +27,55 @@ export const saveReportsToStorage = (reports: CncDailyReport[]): void => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
   } catch (err) {
     console.error('Error saving reports to storage:', err);
+  }
+};
+
+// Async Server Sync functions: Fetch from /api/reports so ALL devices (HP SPV, GM, PC Operator) see the exact same real-time data
+export const fetchReportsFromServer = async (): Promise<CncDailyReport[]> => {
+  try {
+    const res = await fetch('/api/reports');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        saveReportsToStorage(data);
+        return data;
+      }
+    }
+  } catch (err) {
+    console.warn('Server sync not available, falling back to local cache', err);
+  }
+  return loadReportsFromStorage();
+};
+
+export const syncReportToServer = async (report: CncDailyReport): Promise<void> => {
+  try {
+    await fetch('/api/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(report),
+    });
+  } catch (err) {
+    console.warn('Failed to post report to server:', err);
+  }
+};
+
+export const deleteReportFromServer = async (id: string): Promise<void> => {
+  try {
+    await fetch(`/api/reports/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  } catch (err) {
+    console.warn('Failed to delete report on server:', err);
+  }
+};
+
+export const clearReportsOnServer = async (): Promise<void> => {
+  try {
+    await fetch('/api/reports/clear', {
+      method: 'POST',
+    });
+  } catch (err) {
+    console.warn('Failed to clear reports on server:', err);
   }
 };
 
@@ -62,6 +112,9 @@ export const saveOrUpdateReport = (report: CncDailyReport): void => {
     reports.unshift(updatedReport);
   }
   saveReportsToStorage(reports);
+
+  // Background sync to shared server
+  syncReportToServer(updatedReport).catch(() => {});
 };
 
 export const submitReportByOperator = (report: CncDailyReport): CncDailyReport => {
@@ -172,61 +225,24 @@ export const processGmApproval = (
 
 export const resetReportsToDemo = (): CncDailyReport[] => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_REPORTS));
+  // Sync each initial report to server
+  INITIAL_REPORTS.forEach((r) => syncReportToServer(r));
   return INITIAL_REPORTS;
 };
 
 export const deleteReport = (id: string): void => {
   const reports = loadReportsFromStorage().filter((r) => r.id !== id);
   saveReportsToStorage(reports);
+  deleteReportFromServer(id).catch(() => {});
 };
 
 export const clearAllReportsToZero = (): void => {
   saveReportsToStorage([]);
+  clearReportsOnServer().catch(() => {});
 };
 
-// Helper: UTF-8 safe base64 encoding & decoding for cross-device URL sharing
-export const encodeReportForUrl = (report: CncDailyReport): string => {
-  try {
-    const jsonStr = JSON.stringify(report);
-    // Encode to base64 with URI component safety
-    return btoa(encodeURIComponent(jsonStr));
-  } catch (e) {
-    console.error('Failed to encode report for URL:', e);
-    return '';
-  }
-};
-
-export const decodeReportFromUrl = (encodedStr: string): CncDailyReport | null => {
-  try {
-    const jsonStr = decodeURIComponent(atob(encodedStr));
-    const parsed = JSON.parse(jsonStr);
-    if (parsed && parsed.id && parsed.operatorName !== undefined) {
-      return parsed as CncDailyReport;
-    }
-    return null;
-  } catch (e) {
-    console.error('Failed to decode report from URL:', e);
-    return null;
-  }
-};
-
-export const getApprovalUrl = (token: string, role: 'supervisor' | 'gm', report?: CncDailyReport | string): string => {
+export const getApprovalUrl = (token: string, role: 'supervisor' | 'gm', reportId?: string): string => {
   const baseUrl = window.location.origin + window.location.pathname;
-  let reportId = '';
-  let payloadParam = '';
-
-  if (typeof report === 'string') {
-    reportId = report;
-    const found = getReportById(reportId);
-    if (found) {
-      const encoded = encodeReportForUrl(found);
-      if (encoded) payloadParam = `&payload=${encodeURIComponent(encoded)}`;
-    }
-  } else if (report && typeof report === 'object') {
-    reportId = report.id;
-    const encoded = encodeReportForUrl(report);
-    if (encoded) payloadParam = `&payload=${encodeURIComponent(encoded)}`;
-  }
-
-  return `${baseUrl}#approval?token=${encodeURIComponent(token)}&role=${role}${reportId ? `&id=${encodeURIComponent(reportId)}` : ''}${payloadParam}`;
+  const roleCode = role === 'supervisor' ? 'spv' : 'gm';
+  return `${baseUrl}#/${roleCode}/${reportId || token}`;
 };
